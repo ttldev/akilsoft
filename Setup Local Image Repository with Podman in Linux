@@ -1,0 +1,48 @@
+Step for Setup Local Image Repository with Podman in Linux Debian Buster 10/Feodora 33
+
+## Execute the following command to create a new directory for storing the podman/docker container: 
+mkdir -pv /var/lib/registry 
+
+## Create a new user to run the podman as non-root user:
+useradd podman
+passwd podman
+
+## Add non-root user to sudo group
+usermod -a -G sudo podman
+
+## Set Permission for /var/lib/registry directory just created for non-root user podman
+chown -Rv podman.podman /var/lib/registry/
+
+## Edit /etc/containers/registries.conf and add the following lines
+[registries.search]
+registries = ['registry.access.redhat.com','registry.fedoraproject.org','registry.centos.org','docker.io']
+
+[registries.insecure]
+registries = ['localhost:5000']
+
+[registries.block]
+registries = []
+
+## To Test the Local Repository just created, try to pull an image from external repositoriesand then push it to the local registry repository. 
+podman pull hello-world
+
+## Verify pulled images
+podman images
+
+## Tag the pulled image first before pushing the image to the local repository registry:  
+podman tag docker.io/library/hello-world localhost:5000/hello-world
+
+## Verify the image tagged as localhost:5000/hello-world
+podman images
+
+## Now push  "pulled image localhost:5000/hello-world" to the local repository: 
+podman push localhost:5000/hello-world
+
+### Finally run the image from the localhost repository  and If you see this message, Cheers..
+## (Hello from Docker! This message shows that your installation appears to be working correctly).
+podman run localhost:5000/hello-world
+
+
+
+
+ 
