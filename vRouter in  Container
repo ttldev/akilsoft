@@ -1,0 +1,38 @@
+Build vRouter
+git clone -b equuleus --single-branch https://github.com/vyos/vyos-build
+cd vyos-build
+podman build -t vyos/vyos-build:equuleus docker
+podman run --rm -it --privileged -v $(pwd):/vyos -w /vyos vyos/vyos-build:equuleus bash
+./configure --architecture amd64 --build-by "devops@akilisoft.com" localhost/vyos:1.3.1
+ sudo make iso
+ 
+alias vybld='docker pull vyos/vyos-build:current && docker run --rm -it \
+    -v "$(pwd)":/vyos \
+    -v "$HOME/.gitconfig":/etc/gitconfig \
+    -v "$HOME/.bash_aliases":/home/vyos_bld/.bash_aliases \
+    -v "$HOME/.bashrc":/home/vyos_bld/.bashrc \
+    -w /vyos --privileged --sysctl net.ipv6.conf.lo.disable_ipv6=0 \
+    -e GOSU_UID=$(id -u) -e GOSU_GID=$(id -g) \
+    vyos/vyos-build:equuleus bash'
+
+Deploy container from ISO
+
+Download the ISO on which you want to base the container. In this example, the name of the ISO is vyos-1.4-rolling-202111281249-amd64.iso. If you created a custom IPv6-enabled network, the docker run command below will require that this network be included as the --net parameter to docker run.
+
+$ mkdir vyos && cd vyos
+$ cp ~/vyos-1.4-rolling-202111281249-amd64.iso .
+$ mkdir rootfs
+$ sudo mount -o loop vyos-1.4-rolling-202111281249-amd64.iso rootfs
+$ sudo apt-get install -y squashfs-tools
+$ mkdir unsquashfs
+$ sudo unsquashfs -f -d unsquashfs/ rootfs/live/filesystem.squashfs
+$ sudo tar -C unsquashfs -c . | docker import - vyos:1.4-rolling-202111281249
+$ sudo umount rootfs
+$ cd ..
+$ sudo rm -rf vyos
+$ docker run -d --rm --name vyos --privileged -v /lib/modules:/lib/modules \
+> vyos:1.4-rolling-202111281249 /sbin/init
+$ docker exec -ti vyos su - vyos
+
+
+
