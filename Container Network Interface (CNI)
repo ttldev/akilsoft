@@ -1,0 +1,45 @@
+
+Container Network Interface (CNI) is a framework and an interface that abstracts away the network stack from the container runtime. This abstraction helps separate container management and networking thereby providing different players in the market, target the two problems independently. CNI is one of the two frameworks that make this abstraction possible, the other being the Container Network Model (CNM) that Docker implements as libNetwork. When Docker developed libNetwork (based on CNM) for docker container networking, CoreOS came up with a competing model for rkt (pronounced rocket) their container runtime. CNI being the network interface of choice for Kubernetes, the most popular container orchestration platform, it has gained popularity. CNI is now part of the CNCF consortium.
+
+The CNI"nterface" is composed of two components - NetPlugin and the IPAM plugin. While NetPlugin is responsible for setting up network plumbing i.e. conduit between the container & the host, the IPAM plugin is responsible for IP address allocation. Since these two are designed to be pluggable, we can pick-and-choose plugins from different sources/vendors for each of them. CNI takes in a JSON configuration file from the container runtime or from an orchestrator like Kubernetes, that specifies the choice for each of these components.
+
+Sample CNI configuration file
+
+ {  
+  "cniVersion": "0.3.1",  
+  "name": "example-network",  
+  "type": "bridge",  
+  "bridge": "cni0",  
+  "isGateway": true,  
+  "ipam": {  
+   "type": "host-local",  
+   "subnet": "10.10.10.0/24”,  
+   "dataDir": "/home/ubuntu/sample_ipam_datadir"  
+  }  
+ }  
+
+The netPlugin in our sample configuration is type "bridge" and the IPAM plugin is type "host-local". When CNI is invoked for a supported operation, it loads and calls into these plugin modules. The bridge netPlugin module and the host-local IPAM modules are host-local i.e. they are scoped to the host they run on and are bound by the configuration passed to the CNI driver. The distributed control/orchestration of network stacks across hosts is entrusted to a different entity ideally a network controller or SDN. Also note that driver specific configuration is provided along with the driver type. In the above example we specify the subnet from which the host-local driver will allocate/de-allocate IP addresses for containers. Another interesting config value to note is the "bridge" key, it specifies the name of the linux bridge on the host that is going to be used to connect containers.
+
+Now that we've seen a simple example of CNI configuration, lets take a look at operations CNI exposes for container networking along with snippets of code. Keeping everything simple, CNI defines two allowed operations on a network plugin: 
+
+    AddNetwork (ADD) and 
+    DelNetwork (DEL) 
+
+
+As the name of these operations suggest, AddNetwork calls the specified plugin with the ADD command and DelNetwork calls the plugin with the DEL command. Plugins are free to implement the control logic depending on their type i.e. a bridge netPlugin will implement the ADD command by creating a patch cable between the container network namespace and the bridge specified by the CNI config file in the host namespace whereas the IPAM plugin will implement logic to provision an IP address from the specified range for the same ADD command.
+
+CNI interfaces are declared as:
+
+ type CNI interface {
+ AddNetworkList(net *NetworkConfigList, rt *RuntimeConf) (types.Result, error)
+ DelNetworkList(net *NetworkConfigList, rt *RuntimeConf) error
+
+ AddNetwork(net *NetworkConfig, rt *RuntimeConf) (types.Result, error)
+ DelNetwork(net *NetworkConfig, rt *RuntimeConf) error
+}
+
+CNI also provides the capability to "call" into multiple plugins for a single operation i.e. we can use multiple netPlugins and IPAM plugins with CNI. The "AddNetworkList" and "DelNetworkList" methods provide a way to call "AddNetwork" or "DelNetwork" on each of the plugins. And for this the method also takes in multiple CNI configurations. Two important factors to note are that (1) the netPlugins are all executed first, before the IPAM plugins are invoked, and (2) the configuration flows from one plugin to another. This design makes it possible to pass the output of one plugin to another, making it a powerful design pattern for extension (for example, I could write a netPlugin that does something special like adding security rules via iptables, but also continue using the bridge plugin to do the basic container network plumbing). Serializing of plugin execution (factor 1) removes the possibility of IPAM module (IP allocation) to occur before the container & the plumbing is up-and-running and is also one of the the main differences between the CNI & the CNM model.
+
+Hope that this quick read provides a basic overview of CNI. In my next post, I will describe the plugins in depth and also provide an easy guide to writing your own CNI plugin.
+
+Here are a few CNI reference resources that I found useful & interesting 
